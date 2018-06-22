@@ -21,10 +21,8 @@ import com.bigdata.rdf.model.BigdataStatement;
 import com.bigdata.rdf.sail.BigdataSail;
 import com.bigdata.rdf.sail.BigdataSailRepository;
 import com.bigdata.rdf.sail.BigdataSailRepositoryConnection;
-import com.bigdata.rdf.spo.ISPO;
 import com.bigdata.rdf.store.AbstractTripleStore;
 import com.bigdata.rdf.store.BigdataStatementIterator;
-import com.bigdata.relation.accesspath.IAccessPath;
 import com.codahale.metrics.Meter;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
@@ -140,21 +138,30 @@ public class Reader {
         BigdataSailRepositoryConnection cxn = repo.getReadOnlyConnection();
         AbstractTripleStore store = cxn.getTripleStore();
 
-        log.info("Statements: {}", store.getStatementCount(true));
+        try {
+            log.info("Statements: {}", store.getStatementCount(false));
 
-        final IAccessPath<ISPO> ap = store.getSPORelation().getAccessPath(null, null, null, null);
-        final BigdataStatementIterator itr = store.asStatementIterator(ap.iterator());
-        while (itr.hasNext()) {
-            final BigdataStatement statement = itr.next();
-            func.accept(statement);
-            statementMeter.mark();
-            if (statementMeter.getCount() % 10000 == 0) {
-                log.info("Processed {} statements at ({}, {}, {})",
-                        statementMeter.getCount(),
-                        (long) statementMeter.getOneMinuteRate(),
-                        (long) statementMeter.getFiveMinuteRate(),
-                        (long) statementMeter.getFifteenMinuteRate());
+//            final IAccessPath<ISPO> ap = store.getSPORelation().getAccessPath(null, null, null, null);
+            final BigdataStatementIterator itr = store.getStatements(null, null, null, null);
+//                    store.asStatementIterator(ap.iterator());
+            while (itr.hasNext()) {
+                final BigdataStatement statement = itr.next();
+                func.accept(statement);
+                statementMeter.mark();
+                if (statementMeter.getCount() % 10000 == 0) {
+                    log.info("Processed {} statements at ({}, {}, {})",
+                            statementMeter.getCount(),
+                            (long) statementMeter.getOneMinuteRate(),
+                            (long) statementMeter.getFiveMinuteRate(),
+                            (long) statementMeter.getFifteenMinuteRate());
+                }
             }
+        } catch(Exception e) {
+            log.error("Oops: " + e);
+            throw e;
+        } finally {
+            cxn.close();
+            repo.shutDown();
         }
         log.info("Processed {} statements at ({}, {}, {})",
                 statementMeter.getCount(),
