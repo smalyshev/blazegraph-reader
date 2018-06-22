@@ -13,7 +13,7 @@
   	<dependency>
   		<groupId>org.wikidata.query.rdf</groupId>
   		<artifactId>blazegraph</artifactId>
-  		<version>0.2.4-SNAPSHOT</version>
+  		<version>0.3.1-SNAPSHOT</version>
   		<scope>runtime</scope>
   	</dependency>
     <dependency>
@@ -37,9 +37,32 @@
      <version>21.0</version>
     </dependency>
   </dependencies>
+  <repositories>
+        <repository>
+            <id>wmf.mirrored</id>
+            <url>https://archiva.wikimedia.org/repository/mirrored</url>
+        </repository>
+        <repository>
+            <id>wmf.releases</id>
+            <url>https://archiva.wikimedia.org/repository/releases</url>
+        </repository>
+        <repository>
+            <id>wmf.snapshots</id>
+            <url>https://archiva.wikimedia.org/repository/snapshots</url>
+        </repository>
+  </repositories>
   <build>
     <finalName>blazegraph-reader-${project.version}</finalName>
     <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.6.1</version>
+          <configuration>
+            <source>1.8</source>
+            <target>1.8</target>
+          </configuration>
+        </plugin>
 	  <plugin>
         <artifactId>maven-assembly-plugin</artifactId>
         <executions>
@@ -53,6 +76,35 @@
               <descriptorRefs>
                 <descriptorRef>jar-with-dependencies</descriptorRef>
               </descriptorRefs>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+     <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.0.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>shaded</shadedClassifierName>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>org.wikidata.rdf.Reader</mainClass>
+                </transformer>
+              </transformers>
+              <artifactSet>
+                <includes>
+                  <include>org/wikidata/rdf/**</include>
+                  <include>com.lexicalscope.jewelcli:jewelcli</include>
+                  <inlcude>com.google.guava:guava</inlcude>
+                </includes>
+              </artifactSet>
             </configuration>
           </execution>
         </executions>
