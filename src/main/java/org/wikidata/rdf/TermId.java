@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 import org.openrdf.model.impl.LiteralImpl;
@@ -26,6 +27,7 @@ import com.bigdata.rdf.store.AbstractTripleStore;
 import com.lexicalscope.jewel.cli.Cli;
 import com.lexicalscope.jewel.cli.CliFactory;
 import com.lexicalscope.jewel.cli.Option;
+import com.lexicalscope.jewel.cli.Unparsed;
 
 public class TermId {
 
@@ -42,8 +44,8 @@ public class TermId {
         @Option(shortName = "c", description = "Config file (.properties)")
         String input();
 
-        @Option(shortName = "t", description = "Term to check")
-        String term();
+        @Unparsed(description = "List of terms")
+        List<String> getTerms();
 
         @Option(shortName = "f", description = "Fix the problem (will write to the DB!)")
         boolean fix();
@@ -57,23 +59,16 @@ public class TermId {
             Cli<Options> cli = CliFactory.createCli(Options.class);
             Options options = cli.parseArguments(args);
             TermId r = new TermId();
-            r.getTermId(options.input(), options.term(), options.isFix());
+            BigdataSailRepository repo = r.getRepo(options.input());
+            for(String term: options.getTerms()) {
+                r.getTermId(repo, term, options.isFix());
+            }
         } catch (RepositoryException | IOException | InterruptedException e) {
             e.printStackTrace();
         }
     }
 
-    private LexiconRelation getLexicon(BigdataSailRepository repo) throws RepositoryException, InterruptedException {
-        if (cxn != null) {
-            cxn.commit();
-            cxn.close();
-        }
-        cxn = repo.getUnisolatedConnection();
-        AbstractTripleStore store = cxn.getTripleStore();
-        return store.getLexiconRelation();
-    }
-
-    public void getTermId(String dbFile, String termId, boolean fix) throws IOException, RepositoryException, InterruptedException {
+    private BigdataSailRepository getRepo(String dbFile) throws IOException, RepositoryException {
         final Properties props = new Properties();
         props.load(Files.newBufferedReader(new File(dbFile).toPath(),
                 Charset.forName("US-ASCII")));
@@ -81,6 +76,25 @@ public class TermId {
         final BigdataSail sail = new BigdataSail(props);
         final BigdataSailRepository repo = new BigdataSailRepository(sail);
         repo.initialize();
+        return repo;
+    }
+
+    private void commit() throws RepositoryException {
+        if (cxn != null) {
+            cxn.commit();
+            cxn.close();
+            cxn = null;
+        }
+    }
+
+    private LexiconRelation getLexicon(BigdataSailRepository repo) throws RepositoryException, InterruptedException {
+        commit();
+        cxn = repo.getUnisolatedConnection();
+        AbstractTripleStore store = cxn.getTripleStore();
+        return store.getLexiconRelation();
+    }
+
+    public void getTermId(BigdataSailRepository repo, String termId, boolean fix) throws IOException, RepositoryException, InterruptedException {
         LexiconRelation lexicon = getLexicon(repo);
         IIndex term2id = lexicon.getTerm2IdIndex();
         IIndex id2term = lexicon.getId2TermIndex();
@@ -88,12 +102,17 @@ public class TermId {
         LexiconKeyBuilder lexBuilder = ser.getLexiconKeyBuilder();
         IKeyBuilder keyBuilder = ser.getKeyBuilder();
         final BigdataValueFactory vf = lexicon.getValueFactory();
+        System.out.println("Incoming string[" + termId.length() + "](" + termId
+                + "):" + Arrays.toString(termId.getBytes()));
         byte[] key = lexBuilder.plainLiteral2key(termId);
         byte[] result = term2id.lookup(key);
+        if (result == null) {
+            System.out.println("Term not found.");
+            return;
+        }
         IV iv = IVUtility.decode(result);
         //            lexicon.addTerms(terms, 1, false);
         //            System.out.println("Lexicon lookup: " + terms[0].getIV());
-        System.out.println("Incoming string[" + termId.length() + "]:" + Arrays.toString(termId.getBytes()));
         System.out.println("Direct lookup: " + iv);
         byte[] ivKey = iv.encode(keyBuilder.reset()).getKey();
         byte[] reverse = id2term.lookup(ivKey);
@@ -108,8 +127,7 @@ public class TermId {
                 BigdataValue trueValue = (BigdataValue)vf.asValue(new LiteralImpl(termId));
                 id2term.remove(ivKey);
                 id2term.putIfAbsent(ivKey, vf.getValueSerializer().serialize(trueValue));
-                // commit
-                lexicon = getLexicon(repo);
+                commit();
                 System.out.println("Fixed, please re-try.");
             }
         }
