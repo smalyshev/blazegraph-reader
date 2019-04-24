@@ -53,7 +53,7 @@ public class Reader {
         @Option(shortName = "c", description = "Check the map")
         boolean check();
 
-        @Option(shortName = "f", description = "Input file (.jnl)")
+        @Option(shortName = "f", description = "Input file (RWstore.properties)")
         String input();
 
         @Option(shortName = "m", description = "Map file")
